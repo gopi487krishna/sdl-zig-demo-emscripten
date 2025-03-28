@@ -19,6 +19,12 @@
     {
       devShell.x86_64-linux = pkgs.mkShell {
         buildInputs = with pkgs; [nixpkgs-fmt zigpkgs."0.13.0" SDL2 python3 emscripten];
+        
+        # Expose Emscripten path as an environment variable
+        shellHook = ''
+          export EMSCRIPTEN_PATH="${pkgs.emscripten}/share/emscripten"
+          echo "EMSCRIPTEN_PATH is set to: $EMSCRIPTEN_PATH"
+        '';
       };
   };
 }
