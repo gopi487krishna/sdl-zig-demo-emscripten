@@ -12,9 +12,10 @@ nix develop
 If you are on `nix-unstable`, then follow the steps mentioned [139943#issuecomment](https://github.com/NixOS/nixpkgs/issues/139943#issuecomment-930432045)
 to create a cache directory in home.
 
-> Note: Ensure that $EMSCRIPTEN_PATH is set before executing any of the commands below.
 
 ## How to build and run it for web
+
+> Note: Ensure that $EMSCRIPTEN_PATH is set.
 
 ```
 zig build run -Doptimize=Debug -Dtarget=wasm32-emscripten
