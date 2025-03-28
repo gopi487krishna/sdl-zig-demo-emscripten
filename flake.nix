@@ -22,7 +22,7 @@
         
         # Expose Emscripten path as an environment variable
         shellHook = ''
-          export EMSCRIPTEN_PATH="${pkgs.emscripten}/share/emscripten"
+          export EMSCRIPTEN_PATH="${pkgs.emscripten}"
           echo "EMSCRIPTEN_PATH is set to: $EMSCRIPTEN_PATH"
         '';
       };
