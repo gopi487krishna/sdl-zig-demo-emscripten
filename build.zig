@@ -29,7 +29,7 @@ pub fn build(b: *std.Build) !void {
 
     // Setup sysroot with Emscripten so dependencies know where the system include files are
     if (target.result.os.tag == .emscripten) {
-        const emsdk_sysroot = b.pathJoin(&.{ emSdkPath(b), "upstream", "emscripten", "cache", "sysroot" });
+        const emsdk_sysroot = b.pathJoin(&.{ try emSdkPath(b), "share", "emscripten", "cache", "sysroot" });
         b.sysroot = emsdk_sysroot;
     }
 
@@ -69,7 +69,7 @@ pub fn build(b: *std.Build) !void {
             .optimize = optimize,
         });
         // ...and a special run step to run the build result via emrun
-        var run = emRunStep(b, .{ .name = "sdl-zig-demo" });
+        var run = try emRunStep(b, .{ .name = "sdl-zig-demo" });
         run.step.dependOn(&link_step.step);
         const run_cmd = b.step("run", "Run the demo for web via emrun");
         run_cmd.dependOn(&run.step);
@@ -120,7 +120,7 @@ pub fn compileEmscripten(
         .optimize = optimize,
     });
 
-    const emsdk_sysroot = b.pathJoin(&.{ emSdkPath(b), "upstream", "emscripten", "cache", "sysroot" });
+    const emsdk_sysroot = b.pathJoin(&.{ try emSdkPath(b), "share", "emscripten", "cache", "sysroot" });
     const include_path = b.pathJoin(&.{ emsdk_sysroot, "include" });
     exe_lib.addSystemIncludePath(.{ .cwd_relative = include_path });
 
@@ -155,28 +155,8 @@ pub fn compileEmscripten(
 // as dependency to the sokol library (since this needs the emsdk in place),
 // if the emsdk was already setup, null will be returned.
 // NOTE: ideally this would go into a separate emsdk-zig package
-fn emSdkSetupStep(b: *std.Build) !?*std.Build.Step.Run {
-    const emsdk_path = emSdkPath(b);
-    const dot_emsc_path = b.pathJoin(&.{ emsdk_path, ".emscripten" });
-    const dot_emsc_exists = !std.meta.isError(std.fs.accessAbsolute(dot_emsc_path, .{}));
-    if (!dot_emsc_exists) {
-        var cmd = std.ArrayList([]const u8).init(b.allocator);
-        defer cmd.deinit();
-        if (builtin.os.tag == .windows)
-            try cmd.append(b.pathJoin(&.{ emsdk_path, "emsdk.bat" }))
-        else {
-            try cmd.append("bash"); // or try chmod
-            try cmd.append(b.pathJoin(&.{ emsdk_path, "emsdk" }));
-        }
-        const emsdk_install = b.addSystemCommand(cmd.items);
-        emsdk_install.addArgs(&.{ "install", "latest" });
-        const emsdk_activate = b.addSystemCommand(cmd.items);
-        emsdk_activate.addArgs(&.{ "activate", "latest" });
-        emsdk_activate.step.dependOn(&emsdk_install.step);
-        return emsdk_activate;
-    } else {
-        return null;
-    }
+fn emSdkSetupStep(_: *std.Build) !?*std.Build.Step.Run {
+    return null;
 }
 
 // for wasm32-emscripten, need to run the Emscripten linker from the Emscripten SDK
@@ -194,7 +174,7 @@ pub const EmLinkOptions = struct {
     extra_args: []const []const u8 = &.{},
 };
 fn emLinkStep(b: *Build, options: EmLinkOptions) !*Build.Step.Run {
-    const emcc_path = b.pathJoin(&.{ emSdkPath(b), "upstream", "emscripten", "emcc" });
+    const emcc_path = b.pathJoin(&.{ try emSdkPath(b), "bin", "emcc" });
 
     // create a separate output directory zig-out/web
     try std.fs.cwd().makePath(b.fmt("{s}/web", .{b.install_path}));
@@ -311,17 +291,20 @@ fn emLinkStep(b: *Build, options: EmLinkOptions) !*Build.Step.Run {
 pub const EmRunOptions = struct {
     name: []const u8,
 };
-fn emRunStep(b: *std.Build, options: EmRunOptions) *std.Build.Step.Run {
-    const emrun_path = b.pathJoin(&.{ emSdkPath(b), "upstream", "emscripten", "emrun" });
+fn emRunStep(b: *std.Build, options: EmRunOptions) !*std.Build.Step.Run {
+    const emrun_path = b.pathJoin(&.{ try emSdkPath(b), "bin", "emrun" });
     const web_path = b.pathJoin(&.{ ".", "zig-out", "web", options.name });
     // NOTE(jae): 2024-02-24
     // Default browser to chrome as it has the better WASM debugging tools / UX
-    const emrun = b.addSystemCommand(&.{ emrun_path, "--serve_after_exit", "--serve_after_close", "--browser=chrome", b.fmt("{s}.html", .{web_path}) });
+    const emrun = b.addSystemCommand(&.{ emrun_path, "--serve_after_exit", "--serve_after_close", "--browser=firefox", b.fmt("{s}.html", .{web_path}) });
     return emrun;
 }
 
-fn emSdkPath(b: *std.Build) []const u8 {
-    const emsdk = b.dependency("emsdk", .{});
-    const emsdk_path = emsdk.path("").getPath(b);
-    return emsdk_path;
+fn emSdkPath(b: *std.Build) ![]const u8 {
+    var env_map = try std.process.getEnvMap(std.heap.page_allocator);
+    defer env_map.deinit();
+    if (env_map.get("EMSCRIPTEN_PATH")) |path| {
+        return b.dupe(path);
+    }
+    return error.EmscriptenPathNotSet;
 }
