@@ -4,7 +4,7 @@ Here's a basic window with SDL2 in Zig.
 
 ![screenshot](screenshot1.png)
 
-## Developing on nixos 
+## Development on NixOS 
 ```
 nix develop
 ```
